@@ -51,7 +51,7 @@
      "done_when": "A death, an exception or a loop saves one bundle of less than 200 KB: the last 50 screens, the last 500 events and the state.",
      "why": "Each failure becomes data that the AI can study.",
      "code": "telemetry/", "brief": "T3"},
-    {"id": "sample-collector", "name": "Screen samples", "lane": "harness", "phase": 1, "status": "todo", "needs": ["event-log"],
+    {"id": "sample-collector", "name": "Screen samples", "lane": "harness", "phase": 1, "status": "doing", "needs": ["event-log"],
      "done_when": "The first time that a new prompt or screen type appears, one copy goes to samples/.",
      "why": "Observe first, then write code (shadow mode).",
      "code": "telemetry/"},
