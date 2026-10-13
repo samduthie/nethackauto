@@ -1,12 +1,12 @@
 # nhbot
 
 A rule-based NetHack auto-player on the NetHack Learning Environment (NLE).
-The design and the plan are in `docs/nethack-bot-brief.txt`. The rules for the code are in `../CLAUDE.md`.
+The design and the plan are in `docs/nethack-bot-brief.txt`. The rules for the code are in `CLAUDE.md`.
 
 ## Set up (Linux or macOS, Python 3.11 or later)
 
 ```
-cd nethack
+git clone https://github.com/samduthie/nethackauto && cd nethackauto
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 ```

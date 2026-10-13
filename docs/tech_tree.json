@@ -28,7 +28,7 @@
   "nodes": [
     {"id": "setup", "name": "Project and CI", "lane": "harness", "phase": 0, "status": "done", "needs": [],
      "done_when": "CI runs ruff, the format check, mypy and pytest on each push.",
-     "code": ".github/workflows/nethack.yml", "brief": "T1"},
+     "code": ".github/workflows/ci.yml", "brief": "T1"},
     {"id": "adapter", "name": "NLE adapter", "lane": "perceive", "phase": 0, "status": "done", "needs": [],
      "done_when": "A seed gives the same game each time, and the bot sees all prompts.",
      "why": "Only one class talks to NLE, so tests can use recorded frames.",

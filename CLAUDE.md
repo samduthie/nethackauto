@@ -1,10 +1,9 @@
 # NetHack bot - read this first
 
 ## Repository
-- `nethack/`: the NetHack auto-player (Python). All new work is here.
-- The root (`nq2-autoplayer.user.js`, `tests/`, `tools/`): the old NeoQuest II bot (JavaScript).
-  Do not change it for NetHack work. The rules below are for `nethack/` only.
-- The full brief: `nethack/docs/nethack-bot-brief.txt`. Read only the sections that the task needs.
+- This repository (samduthie/nethackauto) holds only the NetHack auto-player (Python).
+- The full brief: `docs/nethack-bot-brief.txt`. Read only the sections that the task needs.
+- History: the first commits were made in samduthie/nq2auto (in `nethack/`) and moved here.
 
 ## What it is
 A rule-based NetHack player on NLE (the NetHack Learning Environment), with an AI in the improvement loop.
@@ -13,11 +12,11 @@ Targets: M1 depth 5. M2 Minetown or depth 10. M3 Sokoban. (Brief section 1.2.)
 Two views of the same loop: watch mode (draws the game in the terminal) and headless mode (fast batches).
 
 ## The plan (tech tree)
-- `nethack/docs/tech_tree.json` is the plan: phases, nodes, needs and "done when" for each node.
+- `docs/tech_tree.json` is the plan: phases, nodes, needs and "done when" for each node.
   To choose the next task, pick a node whose needs are all `done`.
 - Set a node to `doing` when work starts. Set it to `done` in the same commit as the work.
 - `tests/docs/test_tech_tree.py` checks the file (ids, needs, phases, no cycles).
-- `nethack/docs/tech_tree.html` draws the plan. Published: https://claude.ai/artifact/CB6K4D8QwKU4DY8mPxbfGv
+- `docs/tech_tree.html` draws the plan. Published: https://claude.ai/artifact/CB6K4D8QwKU4DY8mPxbfGv
   After a change to the JSON, publish the page again with `tech_tree.json` next to it.
 
 ## Language
@@ -67,7 +66,7 @@ Use these names in code and in talk, so that a search finds them. Definitions: b
 agent-facing telemetry, flight recorder, golden files, record and replay, verify after act, shadow mode,
 persistent world model, priors, coverage search, versioned state migrations, checked assumptions, incident to test.
 
-## Module map (`nethack/src/nhbot/`)
+## Module map (`src/nhbot/`)
 Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (event log, flight recorder, run summary), `view/`,
 `main.py` (the composition root: makes all objects and connects them), `run_options.py`. The rest is planned.
 - `adapter/`: the only code that talks to NLE. Makes `Observation` objects. Sends `Action` objects.
@@ -107,7 +106,7 @@ Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (event l
 Linux and macOS. Windows only with WSL. Python 3.11 or later.
 
 ## Commands
-Run from `nethack/`:
+Run from the repository root:
 ```
 set up:           python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 run one game:     nhbot --seed N --steps 1000          (same: python -m nhbot.main ...)
@@ -127,7 +126,7 @@ run a batch:      python -m nhbot.batch --seeds 1-20
 reports:          python tools/run_report.py runs/<game>/events.jsonl
                   python tools/incident_report.py runs/<game>/bundle-<NN>-<incident>.jsonl
 ```
-CI (`.github/workflows/nethack.yml`) runs ruff, the format check, mypy and pytest on each push to `nethack/`.
+CI (`.github/workflows/ci.yml`) runs ruff, the format check, mypy and pytest on each push.
 
 ## Work rules
 - Read tool output before raw data.

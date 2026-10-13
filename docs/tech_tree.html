@@ -227,7 +227,7 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
     <aside class="detail" id="detail" aria-live="polite"></aside>
   </div>
 
-  <p class="foot" id="foot">Source: nethack/docs/tech_tree.json in samduthie/nq2auto.</p>
+  <p class="foot" id="foot">Source: docs/tech_tree.json in samduthie/nethackauto.</p>
 </div>
 
 <script>
@@ -514,7 +514,7 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
     renderStatusline();
     renderGoals();
     renderPhases();
-    byId("foot").textContent = `Source: nethack/docs/tech_tree.json in samduthie/nq2auto. ${model.nodes.size} nodes. Updated ${data.updated}.`;
+    byId("foot").textContent = `Source: docs/tech_tree.json in samduthie/nethackauto. ${model.nodes.size} nodes. Updated ${data.updated}.`;
     const fromHash = location.hash.slice(1);
     select(model.nodes.has(fromHash) ? fromHash : null);
     new ResizeObserver(drawLinks).observe(treeView);
