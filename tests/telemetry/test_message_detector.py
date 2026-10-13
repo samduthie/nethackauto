@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from nhbot.adapter.input_mode import InputMode
 from nhbot.loop.step import Step
 from nhbot.telemetry.message_detector import MessageDetector
 
@@ -16,3 +17,8 @@ def test_keeps_the_text(make_step: Callable[..., Step]) -> None:
 
 def test_gives_nothing_without_a_message(make_step: Callable[..., Step]) -> None:
     assert MessageDetector().detect(None, make_step()) == []
+
+
+def test_gives_nothing_for_a_prompt(make_step: Callable[..., Step]) -> None:
+    step = make_step(message="What do you want to eat? [d or ?*] ", input_mode=InputMode.KEY_PROMPT)
+    assert MessageDetector().detect(None, step) == []

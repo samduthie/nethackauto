@@ -27,3 +27,4 @@ The same seed plays the same game each time.
 
 Each run writes its files to `runs/<date>-<time>-seed<N>/`: `events.jsonl` (what happened) and one
 `bundle-<NN>-<incident>.jsonl` for each incident (death, stall or crash) with the last 50 screens.
+The first time that a new prompt or message appears, one sample of the screen goes to `samples/`.

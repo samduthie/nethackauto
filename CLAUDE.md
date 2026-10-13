@@ -67,7 +67,7 @@ agent-facing telemetry, flight recorder, golden files, record and replay, verify
 persistent world model, priors, coverage search, versioned state migrations, checked assumptions, incident to test.
 
 ## Module map (`src/nhbot/`)
-Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (event log, flight recorder, run summary), `view/`,
+Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (event log, flight recorder, screen samples, run summary), `view/`,
 `main.py` (the composition root: makes all objects and connects them), `run_options.py`. The rest is planned.
 - `adapter/`: the only code that talks to NLE. Makes `Observation` objects. Sends `Action` objects.
 - `perceive/`: parsers. Screen to facts: map, messages, status, inventory, menus and prompts.
@@ -78,7 +78,7 @@ Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (event l
 - `items_logic/`: pick up, wear, wield, identify, price-identify, drop.
 - `strategy/`: goals and stages. The current goal and the next action toward it.
 - `act/`: the action executor. Sends keys, answers prompts, handles "--More--", then verify after act.
-- `telemetry/`: event log (JSON lines), flight recorder, checked assumptions report.
+- `telemetry/`: event log (JSON lines), flight recorder, screen samples, checked assumptions report.
 - `loop/`: `GameLoop` plays one game. It tells each `StepListener` (view, pacing, telemetry) about each `Step`.
 - `replay/`: loads a recorded game or bundle and runs the decisions again.
 - `view/`: watch mode. Draws the screen and a side panel. It only reads; it never changes a decision.
@@ -99,6 +99,10 @@ Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (event l
 - NLE alone does about 10,000 steps per second. The bot logic is the slow part.
 - NLE gives a new `message` on each step, or an empty one. Each message is one event.
 - On the game-over frame, NLE sets all status values to 0. `NleGame` keeps the last real values there.
+- In a prompt, `message` holds the question too (with a space at the end).
+- The extended command key `#` is not a prompt for `misc` (all 0). Only `message` shows "# ".
+- NetHack puts two spaces between messages on one line, but an engraving in quotes can hold runs of spaces.
+- Autopickup is on in NLE's default options: a random walk picked up a scroll ("e - a scroll labeled ...").
 - `nle.nethack.permonst(i)` gives the monster table (381 monsters): level, speed, AC, MR, resistances, flags.
   It does not give attacks. `nle.nethack.objclass(i)` gives the object table (453 objects).
 
@@ -119,6 +123,10 @@ Each run writes to `runs/<date>-<time>-seed<N>/` (change it with `--runs-dir`):
 - `events.jsonl`: one JSON line for each event (game id, step, turn, depth, x, y, kind, fields).
 - `bundle-<NN>-<incident>.jsonl`: one file for each incident (game_over, stalled, exception).
   Line 1 is the header (run facts, status). Then one line for each of the last 50 screens, then the last events.
+
+New screen types go to `samples/` (change it with `--samples-dir`): one JSON file for each prompt question or
+message sentence, with the whole observation. Git ignores `samples/`. To keep a sample as a golden file,
+copy it to `tests/golden/`. `ObservationCodec` reads the observation back.
 
 Planned:
 ```

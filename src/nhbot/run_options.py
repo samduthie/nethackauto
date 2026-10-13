@@ -15,6 +15,7 @@ class RunOptions:
     delay: float
     character: str
     runs_directory: Path
+    samples_directory: Path
 
     @classmethod
     def parse(cls, arguments: Sequence[str] | None) -> Self:
@@ -25,4 +26,7 @@ class RunOptions:
         parser.add_argument("--delay", type=float, default=0.1, help="seconds per watched step")
         parser.add_argument("--character", default="val-dwa-law-fem")
         parser.add_argument("--runs-dir", type=Path, default=Path("runs"), dest="runs_directory")
+        parser.add_argument(
+            "--samples-dir", type=Path, default=Path("samples"), dest="samples_directory"
+        )
         return cls(**vars(parser.parse_args(arguments)))

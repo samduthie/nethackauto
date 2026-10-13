@@ -25,3 +25,7 @@ def test_runs_folder_is_runs_by_default() -> None:
 
 def test_reads_the_runs_folder() -> None:
     assert RunOptions.parse(["--runs-dir", "/tmp/runs"]).runs_directory == Path("/tmp/runs")
+
+
+def test_samples_folder_is_samples_by_default() -> None:
+    assert RunOptions.parse([]).samples_directory == Path("samples")

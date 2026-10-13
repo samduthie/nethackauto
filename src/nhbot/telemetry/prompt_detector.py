@@ -5,13 +5,11 @@ from nhbot.adapter.observation import Observation
 from nhbot.loop.step import Step
 from nhbot.telemetry.event import Event
 
-PROMPT_MODES = {InputMode.KEY_PROMPT, InputMode.TEXT_PROMPT}
-
 
 class PromptDetector:
     def detect(self, previous: Step | None, current: Step) -> list[Event]:
         observation = current.observation
-        if observation.input_mode not in PROMPT_MODES:
+        if not observation.input_mode.is_prompt:
             return []
         if previous and self._question(previous.observation) == self._question(observation):
             return []

@@ -15,8 +15,9 @@ Play = Callable[[int, int], tuple[str, Path]]
 @pytest.fixture
 def play(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Play:
     def run(seed: int, steps: int) -> tuple[str, Path]:
-        main(["--seed", str(seed), "--steps", str(steps), "--runs-dir", str(tmp_path)])
-        return capsys.readouterr().out, max(tmp_path.iterdir())
+        folders = ["--runs-dir", str(tmp_path / "runs"), "--samples-dir", str(tmp_path / "samples")]
+        main(["--seed", str(seed), "--steps", str(steps), *folders])
+        return capsys.readouterr().out, max((tmp_path / "runs").iterdir())
 
     return run
 
@@ -48,3 +49,12 @@ def test_ends_the_events_with_the_reason(play: Play) -> None:
 
 def test_saves_a_bundle_when_the_hero_dies(play: Play) -> None:
     assert (play(7, 2000)[1] / "bundle-01-game_over.jsonl").exists()  # seed 7 dies at step 1263
+
+
+def test_saves_samples_of_new_screens(play: Play) -> None:
+    run_directory = play(1, 100)[1]
+    assert any((run_directory.parent.parent / "samples").iterdir())
+
+
+def test_prints_the_number_of_new_samples(play: Play) -> None:
+    assert "new samples: " in play(1, 10)[0]

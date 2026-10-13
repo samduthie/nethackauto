@@ -1,6 +1,7 @@
 """Plays one game. This is the composition root: it makes all objects and connects them.
 
 Each run writes its files to runs/<game id>/: events.jsonl and one bundle for each incident.
+New screen types go to samples/.
 """
 
 import random
@@ -12,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from nhbot.adapter.nle_game import NleGame
+from nhbot.adapter.observation_codec import ObservationCodec
 from nhbot.adapter.observation_reader import ObservationReader
 from nhbot.loop.game_loop import GameLoop
 from nhbot.loop.step_listener import StepListener
@@ -34,6 +36,9 @@ from nhbot.telemetry.prompt_detector import PromptDetector
 from nhbot.telemetry.recent_events import RecentEvents
 from nhbot.telemetry.run_info import RunInfo
 from nhbot.telemetry.run_summary import RunSummary
+from nhbot.telemetry.sample_collector import SampleCollector
+from nhbot.telemetry.sample_store import SampleStore
+from nhbot.telemetry.screen_classifier import ScreenClassifier
 from nhbot.telemetry.stall_trigger import StallTrigger
 from nhbot.telemetry.status_change_detector import StatusChangeDetector
 from nhbot.view.keyboard import Keyboard
@@ -63,16 +68,24 @@ def main(arguments: Sequence[str] | None = None) -> None:
     run_directory = options.runs_directory / game_id
     run_directory.mkdir(parents=True, exist_ok=True)
     summary = RunSummary(options.seed)
+    samples = SampleCollector(
+        ScreenClassifier(), SampleStore(options.samples_directory), ObservationCodec(), run_info
+    )
     policy = RandomWalk(random.Random(options.seed))
     game = NleGame(options.seed, options.character, ObservationReader())
     try:
         with suppress(KeyboardInterrupt), game, ExitStack() as stack:
-            listeners = [summary, *telemetry(stack, run_info, run_directory)]
+            listeners: list[StepListener] = [
+                summary,
+                samples,
+                *telemetry(stack, run_info, run_directory),
+            ]
             if options.watch:
                 listeners += watch_view(stack, options)
             GameLoop(game, policy, listeners, options.max_steps).run()
     finally:
         print(f"run files: {run_directory}")
+        print(f"new samples: {samples.saved_count} in {options.samples_directory}")
     print(summary.line())
 
 

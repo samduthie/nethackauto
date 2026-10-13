@@ -51,7 +51,7 @@
      "done_when": "A death, an exception or a loop saves one bundle of less than 200 KB: the last 50 screens, the last 500 events and the state.",
      "why": "Each failure becomes data that the AI can study.",
      "code": "telemetry/", "brief": "T3"},
-    {"id": "sample-collector", "name": "Screen samples", "lane": "harness", "phase": 1, "status": "doing", "needs": ["event-log"],
+    {"id": "sample-collector", "name": "Screen samples", "lane": "harness", "phase": 1, "status": "done", "needs": ["event-log"],
      "done_when": "The first time that a new prompt or screen type appears, one copy goes to samples/.",
      "why": "Observe first, then write code (shadow mode).",
      "code": "telemetry/"},
@@ -107,6 +107,7 @@
 
     {"id": "pathfinding", "name": "Pathfinding", "lane": "world", "phase": 4, "status": "todo", "needs": ["level-memory"],
      "done_when": "The bot walks to a chosen tile around walls and known traps, and never moves diagonally into or out of a doorway.",
+     "prior": {"text": "Seen in play: \"You can't move diagonally into an intact doorway.\" and \"You can't move diagonally out of an intact doorway.\"", "source": "samples, seeds 1 to 5"},
      "code": "nav/", "brief": "T5"},
     {"id": "doors", "name": "Doors", "lane": "world", "phase": 4, "status": "todo", "needs": ["pathfinding", "executor"],
      "done_when": "The bot opens closed doors and kicks locked doors, but never a shop door.",
