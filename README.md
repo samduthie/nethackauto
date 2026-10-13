@@ -24,3 +24,6 @@ Keys in watch mode: space pauses or resumes, `.` plays one step, `+` and `-` cha
 ctrl-c stops. The terminal must be at least 112 columns wide.
 
 The same seed plays the same game each time.
+
+Each run writes its files to `runs/<date>-<time>-seed<N>/`: `events.jsonl` (what happened) and one
+`bundle-<NN>-<incident>.jsonl` for each incident (death, stall or crash) with the last 50 screens.

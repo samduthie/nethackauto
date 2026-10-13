@@ -43,11 +43,11 @@
      "done_when": "Each game prints one line: steps, turn and max depth.",
      "code": "telemetry/run_summary.py"},
 
-    {"id": "event-log", "name": "Event log", "lane": "harness", "phase": 1, "status": "doing", "needs": ["game-loop"],
+    {"id": "event-log", "name": "Event log", "lane": "harness", "phase": 1, "status": "done", "needs": ["game-loop"],
      "done_when": "Each game writes events.jsonl. Each line has the game id, turn, depth, position and the event fields.",
      "why": "The AI reads what happened in the whole game, not a short log for humans.",
      "code": "telemetry/", "brief": "T3"},
-    {"id": "flight-recorder", "name": "Flight recorder", "lane": "harness", "phase": 1, "status": "doing", "needs": ["event-log"],
+    {"id": "flight-recorder", "name": "Flight recorder", "lane": "harness", "phase": 1, "status": "done", "needs": ["event-log"],
      "done_when": "A death, an exception or a loop saves one bundle of less than 200 KB: the last 50 screens, the last 500 events and the state.",
      "why": "Each failure becomes data that the AI can study.",
      "code": "telemetry/", "brief": "T3"},

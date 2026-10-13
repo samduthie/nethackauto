@@ -68,7 +68,7 @@ agent-facing telemetry, flight recorder, golden files, record and replay, verify
 persistent world model, priors, coverage search, versioned state migrations, checked assumptions, incident to test.
 
 ## Module map (`nethack/src/nhbot/`)
-Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (only `RunSummary`), `view/`,
+Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (event log, flight recorder, run summary), `view/`,
 `main.py` (the composition root: makes all objects and connects them), `run_options.py`. The rest is planned.
 - `adapter/`: the only code that talks to NLE. Makes `Observation` objects. Sends `Action` objects.
 - `perceive/`: parsers. Screen to facts: map, messages, status, inventory, menus and prompts.
@@ -98,6 +98,8 @@ Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (only `R
 - Observation keys: `blstats`, `chars`, `colors`, `glyphs`, `inv_glyphs`, `inv_letters`, `inv_oclasses`, `inv_strs`,
   `message`, `misc`, `specials`, `tty_chars`, `tty_colors`, `tty_cursor`. Add `misc` to `observation_keys`.
 - NLE alone does about 10,000 steps per second. The bot logic is the slow part.
+- NLE gives a new `message` on each step, or an empty one. Each message is one event.
+- On the game-over frame, NLE sets all status values to 0. `NleGame` keeps the last real values there.
 - `nle.nethack.permonst(i)` gives the monster table (381 monsters): level, speed, AC, MR, resistances, flags.
   It does not give attacks. `nle.nethack.objclass(i)` gives the object table (453 objects).
 
@@ -114,11 +116,16 @@ tests:            pytest
 lint and format:  ruff check . && ruff format --check .
 types:            mypy
 ```
+Each run writes to `runs/<date>-<time>-seed<N>/` (change it with `--runs-dir`):
+- `events.jsonl`: one JSON line for each event (game id, step, turn, depth, x, y, kind, fields).
+- `bundle-<NN>-<incident>.jsonl`: one file for each incident (game_over, stalled, exception).
+  Line 1 is the header (run facts, status). Then one line for each of the last 50 screens, then the last events.
+
 Planned:
 ```
 run a batch:      python -m nhbot.batch --seeds 1-20
 reports:          python tools/run_report.py runs/<game>/events.jsonl
-                  python tools/incident_report.py runs/<game>/bundle_<n>/
+                  python tools/incident_report.py runs/<game>/bundle-<NN>-<incident>.jsonl
 ```
 CI (`.github/workflows/nethack.yml`) runs ruff, the format check, mypy and pytest on each push to `nethack/`.
 
