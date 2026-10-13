@@ -74,13 +74,22 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
 .bar { height: 6px; background: var(--sunken); border-radius: 3px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--done); }
 
-.ready-now { margin-top: 22px; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip {
-  display: inline-flex; gap: 8px; align-items: baseline; cursor: pointer; padding: 6px 10px;
-  background: var(--ready-soft); border: 1px solid var(--ready); border-radius: 999px; font-size: 14px;
+.research { margin-top: 26px; }
+.research-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.pick {
+  width: 100%; height: 100%; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start;
+  text-align: left; cursor: pointer; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
 }
-.chip .nid { font: 12px var(--font-mono); color: var(--muted); }
+.pick.top { border: 2px solid var(--ready); background: var(--ready-soft); }
+.pick-num { font: 400 36px/0.85 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pick.top .pick-num { color: var(--ready); }
+.pick-body { display: grid; gap: 4px; min-width: 0; }
+.pick-name { font-weight: 600; }
+.pick .glyph { margin-right: 8px; font: 600 15px var(--font-mono); color: var(--lane); }
+.pick-why { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.pick-meta { display: flex; flex-wrap: wrap; gap: 8px; font: 11px/1.4 var(--font-mono); color: var(--muted); }
+.pick-meta .tag { font-weight: 600; color: var(--ready); }
+.also { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
 
 .layout { margin-top: 30px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
 .tree { position: relative; min-width: 0; }
@@ -189,14 +198,15 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
     <div class="statusline" id="statusline" aria-label="Overall progress">Loading the plan…</div>
   </header>
 
+  <section class="research" aria-labelledby="research-title">
+    <h2 class="section-title" id="research-title">Research next</h2>
+    <ol class="research-list" id="research"></ol>
+    <p class="also" id="also-ready" hidden></p>
+  </section>
+
   <section class="goals" aria-labelledby="goals-title">
     <h2 class="section-title" id="goals-title">Goals</h2>
     <div class="goal-grid" id="goals"></div>
-  </section>
-
-  <section class="ready-now" aria-labelledby="ready-title">
-    <h2 class="section-title" id="ready-title">Ready to build now</h2>
-    <div class="chips" id="ready"></div>
   </section>
 
   <div class="layout">
@@ -250,20 +260,22 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
     const isBuilt = id => nodes.get(id).status === "done";
     const stateOf = node => node.status === "done" ? "done" : node.status === "doing" ? "doing"
       : node.needs.every(isBuilt) ? "ready" : "locked";
-    const ancestorsCache = new Map();
-    const ancestorsOf = id => {
-      if (!ancestorsCache.has(id)) {
+    const caches = { needs: new Map(), unlocks: new Map() };
+    const reach = (id, direction) => {
+      const cache = caches[direction];
+      if (!cache.has(id)) {
         const found = new Set();
-        const stack = [...nodes.get(id).needs];
+        const stack = [...nodes.get(id)[direction]];
         while (stack.length) {
           const next = stack.pop();
-          if (!found.has(next)) { found.add(next); stack.push(...nodes.get(next).needs); }
+          if (!found.has(next)) { found.add(next); stack.push(...nodes.get(next)[direction]); }
         }
-        ancestorsCache.set(id, found);
+        cache.set(id, found);
       }
-      return ancestorsCache.get(id);
+      return cache.get(id);
     };
-    return { data, nodes, isBuilt, stateOf, ancestorsOf, rank: buildRank(nodes),
+    return { data, nodes, isBuilt, stateOf, rank: buildRank(nodes),
+      ancestorsOf: id => reach(id, "needs"), descendantsOf: id => reach(id, "unlocks"),
       lanes: new Map(data.lanes.map((lane, index) => [lane.id, { ...lane, index }])) };
   }
 
@@ -329,11 +341,62 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
     }));
   }
 
-  function renderReady() {
-    const ready = [...model.nodes.values()].filter(node => model.stateOf(node) === "ready");
-    byId("ready").replaceChildren(...ready.map(node =>
-      el("button", { class: "chip", type: "button", onclick: () => select(node.id) },
-        el("span", {}, node.name), el("span", { class: "nid" }, node.id))));
+  // The research target: the selected goal, else the first goal that is not built.
+  function researchTarget() {
+    const selected = selectedId && model.nodes.get(selectedId);
+    if (selected && selected.kind === "milestone" && !model.isBuilt(selected.id)) return selected;
+    return model.data.goals.map(id => model.nodes.get(id)).find(goal => !model.isBuilt(goal.id));
+  }
+
+  // Parts not built on the longest chain from a node to the target, the node included.
+  function chainLength(targetId) {
+    const onPath = new Set([...model.ancestorsOf(targetId), targetId]);
+    const lengths = new Map();
+    const length = id => {
+      if (!lengths.has(id)) {
+        const after = model.nodes.get(id).unlocks.filter(unlock => onPath.has(unlock)).map(length);
+        lengths.set(id, (model.isBuilt(id) ? 0 : 1) + Math.max(0, ...after));
+      }
+      return lengths.get(id);
+    };
+    return length;
+  }
+
+  const unbuiltAfter = id => [...model.descendantsOf(id)].filter(next => !model.isBuilt(next)).length;
+
+  function renderResearch() {
+    const target = researchTarget();
+    const also = byId("also-ready");
+    const open = [...model.nodes.values()].filter(node => ["ready", "doing"].includes(model.stateOf(node)));
+    if (!target) {
+      byId("research-title").textContent = "Research next";
+      fill(byId("research"), el("li", {}, "All goals are built."));
+      also.hidden = true;
+      return;
+    }
+    const onPath = new Set([...model.ancestorsOf(target.id), target.id]);
+    const chain = chainLength(target.id);
+    const picks = open.filter(node => onPath.has(node.id)).sort((a, b) =>
+      (b.status === "doing") - (a.status === "doing") || chain(b.id) - chain(a.id)
+      || unbuiltAfter(b.id) - unbuiltAfter(a.id) || model.rank.get(a.id) - model.rank.get(b.id));
+    byId("research-title").textContent = `Research next · toward ${target.name}`;
+    fill(byId("research"), ...picks.map((node, index) => researchItem(node, index, chain(node.id), target)));
+    const others = open.filter(node => !onPath.has(node.id));
+    also.hidden = others.length === 0;
+    fill(also, `Also ready, not needed for ${target.name}:`, ...others.map(node => linkButton(node.id)));
+  }
+
+  function researchItem(node, index, chain, target) {
+    const lead = index === 0;
+    return el("li", {}, el("button", {
+      class: "pick" + (lead ? " top" : ""), type: "button", dataset: { lane: node.lane }, onclick: () => select(node.id),
+    },
+      el("span", { class: "pick-num" }, String(index + 1)),
+      el("span", { class: "pick-body" },
+        el("span", { class: "pick-name" }, el("span", { class: "glyph", "aria-hidden": "true" }, model.lanes.get(node.lane).glyph), node.name),
+        el("span", { class: "pick-why" }, `Longest chain to the goal: ${chain} parts. Unlocks ${unbuiltAfter(node.id)} parts in all.`),
+        el("span", { class: "pick-meta" }, lead && el("span", { class: "tag" }, node.status === "doing" ? "In progress" : "Recommended"),
+          el("span", {}, node.id)))));
   }
 
   function renderStatusline() {
@@ -403,6 +466,7 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
       if (position >= 0) card.append(el("span", { class: "order", "aria-label": `build step ${position + 1}` }, String(position + 1)));
     });
     document.querySelectorAll(".goal").forEach(goal => goal.setAttribute("aria-pressed", String(goal.dataset.goal === id)));
+    renderResearch();
     node ? renderDetail(node) : renderGuide();
     detail.classList.toggle("open", Boolean(node));
     try { history.replaceState(null, "", node ? "#" + id : location.pathname + location.search); } catch (error) { /* the frame can refuse it */ }
@@ -449,7 +513,6 @@ h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; t
     model = buildModel(data);
     renderStatusline();
     renderGoals();
-    renderReady();
     renderPhases();
     byId("foot").textContent = `Source: nethack/docs/tech_tree.json in samduthie/nq2auto. ${model.nodes.size} nodes. Updated ${data.updated}.`;
     const fromHash = location.hash.slice(1);
