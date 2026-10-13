@@ -44,7 +44,9 @@ Short sentences. Simple words. One instruction in each sentence.
 - No dead code. No commented-out code.
 
 ### Tests
-- pytest. One test file for each class: `tests/<package>/test_<module>.py`.
+- pytest. One test file for each class with behaviour: `tests/<package>/test_<module>.py`.
+  Data classes and Protocols with no behaviour need no test file.
+- Fakes for tests are in `tests/fakes/`, one class per file. Import them as `from fakes.fake_game import FakeGame`.
 - One assert per test.
 - The test name says the behaviour: `test_finds_down_stairs_when_visible`. Never a version name.
 - Shared setup is in fixtures (`conftest.py`). Do not copy setup between tests.
@@ -57,7 +59,9 @@ Use these names in code and in talk, so that a search finds them. Definitions: b
 agent-facing telemetry, flight recorder, golden files, record and replay, verify after act, shadow mode,
 persistent world model, priors, coverage search, versioned state migrations, checked assumptions, incident to test.
 
-## Module map (planned, `nethack/src/nhbot/`)
+## Module map (`nethack/src/nhbot/`)
+Now: `adapter/`, `strategy/` (only `RandomWalk`), `loop/`, `telemetry/` (only `RunSummary`), `view/`,
+`main.py` (the composition root: makes all objects and connects them), `run_options.py`. The rest is planned.
 - `adapter/`: the only code that talks to NLE. Makes `Observation` objects. Sends `Action` objects.
 - `perceive/`: parsers. Screen to facts: map, messages, status, inventory, menus and prompts.
 - `world/`: the persistent world model. Levels, the dungeon graph, item knowledge, monsters.
@@ -68,36 +72,47 @@ persistent world model, priors, coverage search, versioned state migrations, che
 - `strategy/`: goals and stages. The current goal and the next action toward it.
 - `act/`: the action executor. Sends keys, answers prompts, handles "--More--", then verify after act.
 - `telemetry/`: event log (JSON lines), flight recorder, checked assumptions report.
+- `loop/`: `GameLoop` plays one game. It tells each `StepListener` (view, pacing, telemetry) about each `Step`.
 - `replay/`: loads a recorded game or bundle and runs the decisions again.
 - `view/`: watch mode. Draws the screen and a side panel. It only reads; it never changes a decision.
 
 ## Facts checked (2026-10-13: NLE 1.3.0, Python 3.13, Linux)
 - `pip install nle` works with no build step.
-- Use `NetHackScore-v0` or `NetHack-v0` with a high `max_episode_steps`. `NetHackChallenge-v0` does not accept seeds.
-- `env.unwrapped.seed(core, disp, False)` gives the same game two times.
+- `NleGame` uses the base env class `nle.env.base.NLE`. `NetHackChallenge-v0` does not accept seeds.
+- `env.seed(core, disp, False)` before `reset()` gives the same game two times.
+- By default NLE answers most prompts itself (Escape). `NleGame` sets `allow_all_yn_questions=True` and
+  `allow_all_modes=True`, so the bot sees and answers all prompts. Elbereth needs this.
+- `fix_moon_phase=True`: the moon phase, Friday the 13th and night come from the seed, not from the clock.
+  So a replay on another day plays the same game.
+- `misc` = [key prompt, text prompt, "--More--"]. The game can show "--More--" while a text prompt waits
+  (`[0, 1, 1]`, seen after `E` `-`). Letters do nothing until Enter clears the "--More--".
 - `character="val-dwa-law-fem"` starts a dwarvish Valkyrie.
 - Observation keys: `blstats`, `chars`, `colors`, `glyphs`, `inv_glyphs`, `inv_letters`, `inv_oclasses`, `inv_strs`,
-  `message`, `misc`, `specials`, `tty_chars`, `tty_colors`, `tty_cursor`.
+  `message`, `misc`, `specials`, `tty_chars`, `tty_colors`, `tty_cursor`. Add `misc` to `observation_keys`.
 - NLE alone does about 10,000 steps per second. The bot logic is the slow part.
 - `nle.nethack.permonst(i)` gives the monster table (381 monsters): level, speed, AC, MR, resistances, flags.
   It does not give attacks. `nle.nethack.objclass(i)` gives the object table (453 objects).
-- NetHack reads the real date (moon phase, Friday the 13th, night). A replay on another day can be different.
-  Not solved yet.
 
 ## Platforms
 Linux and macOS. Windows only with WSL. Python 3.11 or later.
 
-## Commands (planned; tasks T1 and T2 make them)
+## Commands
 Run from `nethack/`:
 ```
-run one game:     python -m nhbot.main --seed N
-watch one game:   python -m nhbot.main --seed N --watch
+set up:           python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+run one game:     nhbot --seed N --steps 1000          (same: python -m nhbot.main ...)
+watch one game:   nhbot --seed N --watch --delay 0.1   (needs a terminal of 112 x 25 or more)
+tests:            pytest
+lint and format:  ruff check . && ruff format --check .
+types:            mypy
+```
+Planned:
+```
 run a batch:      python -m nhbot.batch --seeds 1-20
-tests:            pytest -q
-lint and types:   ruff check . && mypy src
 reports:          python tools/run_report.py runs/<game>/events.jsonl
                   python tools/incident_report.py runs/<game>/bundle_<n>/
 ```
+CI (`.github/workflows/nethack.yml`) runs ruff, the format check, mypy and pytest on each push to `nethack/`.
 
 ## Work rules
 - Read tool output before raw data.
@@ -105,6 +120,6 @@ reports:          python tools/run_report.py runs/<game>/events.jsonl
 - Observe first (shadow mode), then write code. Do not write code from a guess about a screen.
 - Each new guess goes into the checked assumptions list (`telemetry/`), with a name and a status.
 - Each rule in `data/rules/` has a source.
-- Before a push: tests, ruff and mypy pass. Re-read the diff.
+- Before a push: pytest, ruff check, ruff format --check and mypy pass. Re-read the diff.
 - A commit message says what changed and why, in STE.
   For a change that should help: write the metric before and after, on the same seeds.
