@@ -129,5 +129,6 @@ CI (`.github/workflows/nethack.yml`) runs ruff, the format check, mypy and pytes
 - Each new guess goes into the checked assumptions list (`telemetry/`), with a name and a status.
 - Each rule in `data/rules/` has a source.
 - Before a push: pytest, ruff check, ruff format --check and mypy pass. Re-read the diff.
+- Commit and push each finished piece of work at once. Do not wait to be asked.
 - A commit message says what changed and why, in STE.
   For a change that should help: write the metric before and after, on the same seeds.
