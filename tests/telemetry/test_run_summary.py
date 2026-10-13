@@ -21,17 +21,17 @@ def test_reports_game_over(make_observation: Callable[..., Observation]) -> None
     assert "game over" in summary_line([make_observation(game_over=True)])
 
 
-def test_keeps_the_max_depth_after_the_end_screens(
+def test_keeps_the_max_depth_after_going_up(
     make_observation: Callable[..., Observation], make_bottom_line: Callable[..., BottomLine]
 ) -> None:
-    depths = [2, 3, 0]  # NLE sets the stats to 0 on the end screens
+    depths = [2, 3, 1]
     observations = [make_observation(bottom_line=make_bottom_line(depth=d)) for d in depths]
     assert summary_line(observations).endswith("max depth 3")
 
 
-def test_keeps_the_last_turn_after_the_end_screens(
+def test_reports_the_last_turn(
     make_observation: Callable[..., Observation], make_bottom_line: Callable[..., BottomLine]
 ) -> None:
-    turns = [5, 9, 0]
+    turns = [5, 9]
     observations = [make_observation(bottom_line=make_bottom_line(turn=t)) for t in turns]
     assert "turn 9," in summary_line(observations)

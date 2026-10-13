@@ -1,3 +1,4 @@
+import random
 from collections.abc import Callable, Iterator
 
 import pytest
@@ -8,6 +9,7 @@ from nhbot.adapter.key import Key
 from nhbot.adapter.nle_game import NleGame
 from nhbot.adapter.observation import Observation
 from nhbot.adapter.observation_reader import ObservationReader
+from nhbot.strategy.random_walk import RandomWalk
 
 CHARACTER = "val-dwa-law-fem"
 StartScreen = Callable[[int], tuple[str, ...]]
@@ -57,6 +59,15 @@ def test_engrave_asks_for_a_key(game: NleGame) -> None:
 
 def test_engrave_in_the_dust_asks_for_text(game: NleGame) -> None:
     assert send_keys(game, "E-" + Key.ENTER).input_mode is InputMode.TEXT_PROMPT
+
+
+def test_game_over_frame_keeps_the_last_status() -> None:
+    with NleGame(7, CHARACTER, ObservationReader()) as dying_game:  # seed 7 dies at step 1263
+        walk = RandomWalk(random.Random(7))
+        observation = dying_game.start()
+        while not observation.game_over:
+            observation = dying_game.send(walk.decide(observation).action)
+    assert observation.bottom_line.depth == 1
 
 
 def test_unknown_key_raises(game: NleGame) -> None:
