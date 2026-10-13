@@ -1,0 +1,512 @@
+NETHACK AUTO-PLAYER: PROJECT BRIEF
+==================================
+
+Version 1. Written after the NeoQuest II auto-player project (nq2auto), as the start of a new repository.
+Language: Simplified Technical English (short sentences, simple words, one instruction in each sentence).
+
+Contents
+  1. Purpose and goals
+  2. What we learned from the NeoQuest II bot
+  3. Glossary of patterns (the names that we use)
+  4. NetHack is different from NeoQuest II
+  5. How the bot connects to the game
+  6. Architecture (modules from day one)
+  7. The data loop: the bot collects what the AI needs
+  8. Game knowledge: priors, rules and data files
+  9. Strategy: goals, stages and milestones
+  10. Safety rules (the first rules that the bot must obey)
+  11. Testing
+  12. Context rules for the AI (keep the context small)
+  13. Repository layout
+  14. The first backlog (tasks in order, with "done when")
+  15. Metrics
+  16. Mistakes not to repeat
+  17. Open questions
+  18. A seed for CLAUDE.md
+
+
+1. PURPOSE AND GOALS
+--------------------
+
+1.1 Purpose
+  Build a bot that plays NetHack by itself, from the start of a game to as deep as it can get.
+  The bot and an AI (Claude) work together in a loop:
+    - The bot plays, and it records what the AI needs.
+    - The AI reads the records, finds the problem, changes the code, and adds a test.
+    - The bot plays again with the change.
+
+1.2 The final goal and the real goals
+  The final goal is an ascension. That is very difficult. Strong bots have rarely done it.
+  So we use milestones. Each milestone must be measurable (see section 9 and section 15):
+    M1  Survive and go down to dungeon level 5 in most games.
+    M2  Reach Minetown (Gnomish Mines) or dungeon level 10.
+    M3  Complete Sokoban level 1 (later: all of Sokoban).
+    M4  Reach the Oracle, the Big Room or the quest portal level.
+    M5  Reach Medusa, then the Castle.
+    M6  Ascend.
+
+1.3 Not in scope (for now)
+  - Play on public servers. Play locally only. A public server can have rules against bots.
+  - Neural network training. We start with a rule-based ("symbolic") bot. Rule-based bots did best
+    in the 2021 NetHack Challenge. A learned part can come later, for one narrow job.
+
+
+2. WHAT WE LEARNED FROM THE NEOQUEST II BOT
+-------------------------------------------
+
+2.1 What worked
+  - Real data instead of guesses. Real pages and map exports answered questions that guides could not.
+  - Real data became tests ("golden files"). Each bug fix got a test made from the case that broke.
+  - Replays of saved worlds found bugs before the user saw them.
+  - Rules from a human guide (the speedrun guide) gave the bot good defaults ("priors").
+  - "Check the result on the next page" stopped wrong guesses from doing damage ("verify after act").
+  - Memory across games (goal places, maps) made later games much faster.
+
+2.2 What did not work
+  - One file of 5,500 lines. Each change needed a large search and a lot of context.
+  - A log of 40 lines. We lost the first part of a boss fight that we wanted to study.
+  - Logs for humans (text with emoji), not for a machine.
+  - Debug output that was too big (all exits of all maps in each paste).
+  - Guesses written as code before any real sample was seen.
+  - Global state everywhere ("st" and "world"). Hard to test one function alone.
+  - Tests named by version (v0365.test). They did not say what they test.
+  - Some rules from a casual guide did not fit the speedrun goal (training levels). Choose the source
+    of each rule on purpose, and write the source next to the rule.
+
+2.3 Rules for the new project (from 2.1 and 2.2)
+  - Small modules from day one. Data in data files.
+  - A structured event log (JSON lines) from day one.
+  - A flight recorder from day one.
+  - Observe first, then code (shadow mode).
+  - Each guess has a name and a status (not checked / confirmed / failed).
+  - Tests named by feature.
+
+
+3. GLOSSARY OF PATTERNS (THE NAMES THAT WE USE)
+------------------------------------------------
+
+Use these names in talk, in code (function and module names) and in comments. Then a search finds them.
+
+  AGENT-FACING TELEMETRY
+    The bot records the data that the AI needs to improve the bot. Not only data for humans.
+    NetHack: event log, game state snapshots, screen samples, ttyrec files.
+
+  FLIGHT RECORDER
+    On an incident (death, loop, stop, an unknown screen), the bot saves one bundle automatically:
+    the last screens, the last events, the state, and the map around the hero. One file per incident.
+
+  GOLDEN FILES
+    Real game screens and states, saved as test data. The parser and the decisions are tested on them.
+
+  RECORD AND REPLAY
+    Run the bot's decisions again on a recorded game or state, without the live game. With a fixed seed,
+    a whole game can be played again in the same way.
+
+  VERIFY AFTER ACT
+    Do an action, then check the result on the next observation. If the result is wrong, do not try the
+    same thing again in a loop. Log it.
+
+  SHADOW MODE
+    The bot watches (or acts very simply) and only collects samples. The logic that uses a new kind of
+    screen is written after real samples exist.
+
+  PERSISTENT WORLD MODEL
+    What the bot knows: in this game (levels, stairs, shops, altars, items seen) and across games
+    (monster facts, item facts, statistics). See 4.1: in NetHack, maps do not carry to the next game.
+
+  PRIORS
+    Knowledge from outside the game (the NetHack wiki, spoilers, the game's source files) used as a first
+    guess. A prior can be wrong. Observations replace it.
+
+  COVERAGE SEARCH
+    Walk to the parts of a level that were not seen yet. Also: search walls for hidden doors when no
+    exit is found.
+
+  VERSIONED STATE MIGRATIONS
+    A saved state has a version. A one-time change updates an old saved state to the new format.
+
+  CHECKED ASSUMPTIONS
+    A list of the guesses in the code. Each one has a status. The bot reports which ones were confirmed
+    in play. Before a long run, we look at the ones that are still "not checked".
+
+  INCIDENT TO TEST
+    Each flight recorder bundle becomes a replay test. The loop is:
+    the bot fails -> a bundle is saved -> the AI replays it -> the AI fixes the code -> the test stays.
+
+
+4. NETHACK IS DIFFERENT FROM NEOQUEST II
+----------------------------------------
+
+4.1 The world is random
+  NeoQuest II has the same maps in every game. NetHack makes new levels in each game.
+  So:
+    - The "persistent world model" across games holds knowledge and statistics, not maps.
+    - Inside one game, the level memory is very important (stairs, shops, altars, traps, items).
+    - Some levels have fixed layouts or a small set of variants (Sokoban, Minetown, the Oracle, the Big
+      Room, Medusa, the Castle, and others). For these, map priors work as in NeoQuest II.
+    - Item appearances are random in each game ("a blue potion" is not the same potion in the next game).
+      Identification is a job in each game.
+
+4.2 Death is permanent
+  NeoQuest II lets you continue after a death. NetHack does not. One mistake ends the run.
+  So safety rules come before speed (section 10).
+
+4.3 The game is turn-based, and time is not measured in clicks
+  There is no pressure from real time. The bot can think as long as it needs before each action.
+  The game has its own clock (turns). Food and prayer depend on it.
+
+4.4 The interface is a text screen
+  NeoQuest II had HTML pages. NetHack has a terminal screen (80 x 24 characters), messages, menus and
+  prompts. Parsing must handle "--More--", menus with several pages, and yes/no questions.
+
+4.5 There are many more things
+  Hundreds of monsters and hundreds of items, with many special rules. A data file from the game's
+  source is better than rules written by hand (section 8).
+
+
+5. HOW THE BOT CONNECTS TO THE GAME
+-----------------------------------
+
+5.1 Recommended: the NetHack Learning Environment (NLE)
+  - A Python package (pip "nle") that runs NetHack 3.6 and gives structured observations.
+  - Observations include (check the documentation of the version that you install):
+      glyphs (the map as glyph numbers), chars and colors (the map as text), the message line,
+      bottom-line status values (blstats: HP, max HP, depth, hunger, gold, and others),
+      inventory (letters, names, classes), the full terminal screen (tty_chars, tty_cursor).
+  - Actions are keys and commands (move, search, eat, pray, and so on).
+  - It can set the random seeds, so a game can be played again in the same way (record and replay).
+  - It can record ttyrec files, which humans can watch.
+  - Read its license and its current documentation before you start. The API changed between versions.
+
+5.2 Other options (study them; do not start with them)
+  - A NetHack process in a pseudo-terminal, with a terminal emulator library to read the screen.
+    More control, more work.
+  - Earlier bots to study for ideas:
+      AutoAscend (a rule-based bot on NLE; it won the 2021 NetHack Challenge),
+      BotHack (Clojure; it reported an ascension),
+      TAEB (Perl framework), Saiph (C++).
+    Read their design. Do not copy their code without checking the license.
+
+5.3 The interface adapter rule
+  Only one module talks to NLE. All other modules use our own types (Observation, Action).
+  Then we can change the interface later, and we can feed recorded observations in tests.
+
+
+6. ARCHITECTURE (MODULES FROM DAY ONE)
+--------------------------------------
+
+Language: Python (NLE is Python). Use type hints. Use dataclasses for state.
+
+6.1 Modules
+  adapter/        The only code that talks to NLE. Makes Observation objects, sends Action objects.
+  perceive/       Parsers. Screen -> facts:
+                    map.py        level map, hero position, doors, stairs, items on the floor
+                    messages.py   the message line, "--More--", events in messages
+                    status.py     HP, depth, hunger, conditions (from blstats and the bottom lines)
+                    inventory.py  items, letters, known/unknown, cursed/blessed if known
+                    menus.py      menus and prompts (which question is asked)
+  world/          The persistent world model:
+                    level.py      one level: tiles seen, walls, doors, traps, stairs, shops, altars
+                    dungeon.py    the graph of levels and branches (Mines, Sokoban, quest portal)
+                    items.py      item identification knowledge in this game
+                    monsters.py   monsters seen, their danger
+                    knowledge/    cross-game statistics (not maps)
+  data/           Generated data files (section 8): monsters, objects, special levels, rules.
+  nav/            Pathfinding (with unknown tiles, doors, traps, boulders), exploration,
+                  coverage search, searching for hidden doors.
+  tactics/        Fights: attack or not, flee, Elbereth, use an item, ranged attacks.
+  survival/       Hunger, eating, praying, healing, status problems (poison, illness, stoning).
+  items_logic/    What to pick up, wear, wield, identify, price-identify, drop.
+  strategy/       Goals and stages (section 9): the current goal and the next action toward it.
+  act/            The action executor: sends keys, answers prompts, handles "--More--",
+                  then VERIFY AFTER ACT (did the action do what we wanted?).
+  telemetry/      Event log (JSON lines), flight recorder, checked assumptions report.
+  replay/         Load a recorded game or bundle, run the decisions again.
+  tools/          Command-line tools for humans and the AI (map viewer, run report, incident report).
+
+6.2 Rules for the code
+  - A decision function takes clear inputs (state, observation) and returns an action or a decision.
+    No hidden global state.
+  - One module = one job. A module of more than about 400 lines is a sign to split it.
+  - Each module starts with a short comment: what it does, its inputs, its outputs.
+  - Each guess is in the checked assumptions list (telemetry/assumptions.py) with a name.
+  - Constants that are guesses have a comment with their source ("wiki", "test", "guess").
+
+6.3 The main loop (one step)
+  1. Get the observation (adapter).
+  2. Parse it (perceive) and update the world model (world).
+  3. Log the events (telemetry).
+  4. Check the safety rules (survival, tactics). An emergency wins over all goals.
+  5. Ask the strategy for the next action toward the current goal.
+  6. Send the action (act). Verify the result on the next observation.
+  7. If something unknown or bad happens: the flight recorder saves a bundle.
+
+
+7. THE DATA LOOP: THE BOT COLLECTS WHAT THE AI NEEDS
+----------------------------------------------------
+
+7.1 Event log (JSON lines)
+  One line for each event. Examples of event types:
+    game_start, level_enter, level_leave, monster_seen, fight_start, fight_end, hit_given, hit_taken,
+    item_picked, item_used, item_identified, eat, pray, hunger_change, status_change, trap_found,
+    goal_change, stop, death.
+  Each line has: game id, turn, depth, hero position, the event fields.
+  Keep all events of the current game. Keep a summary of old games.
+
+7.2 Flight recorder
+  Triggers: death, a loop (the same state many times), no progress for N turns, an unknown screen or
+  prompt, an exception, a failed verify-after-act.
+  The bundle has: the last 50 screens (text), the last 500 events, the state, the current level map,
+  the hero's inventory and status, the seed, the code version.
+  Size limit: small enough to read in one go (target: under 200 KB of text).
+  Privacy filter: no user names, no paths with user names.
+
+7.3 Samples of new screens (shadow mode)
+  When a screen type or a prompt appears for the first time (a new menu, a new question, a shop
+  message), save one copy in samples/. These become golden files.
+
+7.4 Checked assumptions report
+  At the end of each game: the list of assumptions, and for each: not checked / confirmed (how many
+  times) / failed (with the bundle name).
+
+7.5 Incident to test
+  A tool turns a bundle into a replay test: it loads the bundle, runs the decision, and checks the
+  expected decision. The AI writes the expected result after it fixes the bug.
+
+7.6 Reports for the AI (small)
+  tools/run_report:      one game in 30 lines (depth, turns, cause of death, top events, time per goal).
+  tools/incident_report: one bundle in 50 lines (what happened in the last turns).
+  tools/map_view:        the level map around a position, as text.
+  The AI reads these first. It reads raw data only when a report is not enough.
+
+
+8. GAME KNOWLEDGE: PRIORS, RULES AND DATA FILES
+-----------------------------------------------
+
+8.1 Generate data from the game's source
+  The NetHack source has the monster table and the object table. A script makes JSON files from them:
+    data/monsters.json   name, symbol, level, speed, attacks, resistances, corpse effects, flags
+    data/objects.json    name, class, appearance pools, cost, weight, effects
+  Then the bot does not need hand-written rules for each monster.
+
+8.2 Special levels
+  data/special_levels/  Sokoban (each level has a small number of fixed variants), Minetown variants,
+  the Oracle, the Big Room variants, Medusa, the Castle. Use them as map priors.
+  Sokoban needs a solver or stored solutions for each variant.
+
+8.3 Rules from the wiki (priors)
+  data/rules/*.yaml, one rule per entry, each with: the rule, the source (wiki page), the status
+  (prior / confirmed). Examples of rule topics:
+    - which corpses are safe to eat, and which are dangerous (see section 10)
+    - prayer: when it is safe (the bot tracks the prayer timeout from the last prayer)
+    - price identification: base prices of item classes
+    - Elbereth: which monsters respect it, and when it is erased
+
+8.4 Price identification and item knowledge
+  Item knowledge is per game (4.1). The bot records each test (price seen, effect seen, engrave test)
+  and updates what it knows about each appearance.
+
+8.5 Verify the priors
+  The wiki is for a version. NLE uses NetHack 3.6. Check that each rule is for 3.6.
+
+
+9. STRATEGY: GOALS, STAGES AND MILESTONES
+-----------------------------------------
+
+9.1 Character
+  Start with one role, to keep the rules small. Recommended: Valkyrie (human or dwarf). It is the role
+  that most players think is the easiest: strong in melee, cold resistance, stealth.
+  Add other roles later.
+
+9.2 Goal structure
+  A stack of goals, from long-term to now. Examples:
+    long:   reach the next milestone (M1 ... M6)
+    medium: go down to depth N; visit Minetown; do Sokoban; find the quest portal
+    short:  explore this level; reach the down stairs; get the item; leave this fight
+    now:    one action
+  Emergencies (low HP, hunger, a dangerous monster, stoning, illness) take control at once.
+
+9.3 Stages (build them in this order)
+  S0  Harness: adapter, parsers, event log, flight recorder, replay, golden files. The bot only walks.
+  S1  Explore one level, find the down stairs, go down. Fight weak monsters. Eat when hungry.
+      Pray in an emergency when it is safe.
+  S2  Safety rules (section 10). Flee and Elbereth. Do not fight what is too strong.
+  S3  Items: wear armour, wield a better weapon, use healing potions when known, keep food.
+  S4  Gnomish Mines to Minetown (temple, shops). Altar use to check curse status.
+  S5  Sokoban.
+  S6  Deeper: the Oracle, the Big Room, the quest portal, Medusa, the Castle.
+  S7  The rest (the Gehennom levels and the end game).
+
+9.4 Pacing rule (from NeoQuest II: XP versus speed)
+  NetHack has no speed goal at first. The goal is to survive. Experience levels make the hero safer.
+  But a hero that stays too long on easy levels gets hungry. The strategy decides when to go down by
+  rules with numbers, for example "experience level at least X before depth Y". These numbers are
+  priors. Tune them with the metrics (section 15).
+
+
+10. SAFETY RULES (THE FIRST RULES THAT THE BOT MUST OBEY)
+---------------------------------------------------------
+
+These are well-known NetHack dangers. Each is a prior: check it on the wiki for version 3.6, write the
+source next to the rule, and add a test.
+
+  - Never touch or eat a cockatrice or a chickatrice corpse without protection. Never melee one with
+    bare hands.
+  - Never melee a floating eye (unless the hero is blind or has reflection/free action as the wiki says).
+  - Do not eat corpses that are too old, poisonous (without poison resistance), acidic in a dangerous way,
+    or that cause problems (for example were-creatures, and others on the wiki's list).
+  - Watch hunger. Eat before "Weak". Keep food.
+  - Pray only when it is safe: in real trouble (for example HP below one seventh of max HP, or "Weak"
+    from hunger) and when the prayer timeout is low enough. Track the turn of the last prayer.
+  - Flee from monsters that are too strong for the hero's level (soldier ants, dwarves with mattocks
+    early, and others: use data/monsters.json and the hero's level).
+  - Do not read unknown scrolls or quaff unknown potions in a bad place (until the bot has rules for them).
+  - Do not attack peaceful monsters or shopkeepers. Do not steal from shops.
+  - Elbereth: engrave it in the dust when in danger, against the monsters that respect it.
+  - Stoning, illness, sliming: know the cures and use them at once.
+
+  Verify after act on each safety action: after "pray", check the message and the status; after
+  "eat", check the message; after "engrave Elbereth", check that it is there.
+
+
+11. TESTING
+-----------
+
+  - pytest. Tests named by feature: test_parse_map.py, test_prayer.py, test_explore.py ...
+  - Golden files: real screens and states in tests/golden/. Each parser has tests on them.
+  - Replay tests: tests/replay/ load a bundle and check a decision (incident to test).
+  - Seeded games: a few fixed seeds, run for N turns in CI. They must not crash, and they must not loop.
+  - Fast tests on each change. Long seeded games at night or by hand.
+  - A lint tool (ruff) and a type check (mypy), in CI.
+  - Before a push: the fast tests and lint pass. Re-read the diff.
+
+
+12. CONTEXT RULES FOR THE AI (KEEP THE CONTEXT SMALL)
+-----------------------------------------------------
+
+  - Small modules. The AI reads only the module of the task.
+  - Data in data files. Many changes are data changes.
+  - CLAUDE.md is the first page to read (section 18): the module map, the glossary, the commands.
+  - A function index: a generated file with each public function, its module, and one line about it.
+  - Tools answer questions about big data (maps, logs, bundles). The AI does not read raw data first.
+  - Reports and bundles have a size limit.
+  - Tests named by feature, so the AI finds the right test.
+  - One task per session when possible. A long session uses more context than two short ones.
+  - Each commit message says what changed and why, in STE. The history is also documentation.
+
+
+13. REPOSITORY LAYOUT
+---------------------
+
+  README.md                what the project is, how to run it
+  CLAUDE.md                the first page for the AI (section 18)
+  pyproject.toml           dependencies, ruff, mypy, pytest settings
+  src/nhbot/
+    adapter/  perceive/  world/  nav/  tactics/  survival/  items_logic/
+    strategy/  act/  telemetry/  replay/
+    main.py                the main loop
+  data/
+    monsters.json  objects.json  special_levels/  rules/
+  tools/
+    gen_data.py            make data/*.json from the NetHack source
+    map_view.py  run_report.py  incident_report.py  bundle_to_test.py  function_index.py
+  tests/
+    golden/  replay/  test_*.py
+  samples/                 new screens seen in shadow mode (not all go into tests)
+  runs/                    event logs, bundles, ttyrec files (in .gitignore; keep only selected ones)
+  docs/
+    glossary.md            the patterns of section 3
+    decisions.md           short records of important decisions and why
+
+
+14. THE FIRST BACKLOG (TASKS IN ORDER, WITH "DONE WHEN")
+--------------------------------------------------------
+
+  T1  Repository setup: layout, pyproject, ruff, mypy, pytest, CI.
+      Done when: CI runs lint, types and an empty test on each push.
+  T2  Adapter: start a seeded NLE game, read an observation, send an action.
+      Done when: a script plays 100 random safe moves with a fixed seed and prints the depth.
+  T3  Event log and flight recorder (skeleton).
+      Done when: a game writes events.jsonl, and an exception makes a bundle.
+  T4  Parsers for the map, the status and the messages, with golden files.
+      Done when: 10 golden screens parse to the expected facts in tests.
+  T5  Level memory and pathfinding.
+      Done when: the bot walks to a chosen tile on a known level, around walls and through doors.
+  T6  Exploration and the down stairs.
+      Done when: on 5 fixed seeds the bot explores level 1 and goes down without help.
+  T7  "--More--", menus and yes/no prompts in the executor, with verify after act.
+      Done when: no game stops on an unknown prompt in 20 seeded games; unknown prompts make a sample.
+  T8  Simple fights: attack an adjacent weak monster; flee from a strong one.
+      Done when: the run report shows deaths by cause, and the bot reaches depth 3 in most of 20 games.
+  T9  Hunger and eating; prayer in an emergency.
+      Done when: no deaths by starvation in 20 games; prayer only when the rules say it is safe.
+  T10 Replay tool and incident to test.
+      Done when: a bundle from a death can be replayed, and a test can be made from it.
+  T11 Data generation from the source (monsters.json, objects.json).
+      Done when: the fight rules use monster level and danger from the data file.
+  T12 Safety rules of section 10, each with a test.
+      Done when: each rule has a test, and the checked assumptions report lists them.
+  After T12: the milestones of section 1.2, one at a time, with the metrics of section 15.
+
+
+15. METRICS
+-----------
+
+  Per game:      depth reached, turns, experience level, score, cause of death, time per goal,
+                 number of flight recorder bundles.
+  Per batch of seeded games (for example 20): median depth, the share of games that reach each
+                 milestone, the top 5 causes of death.
+  Per fight:     turns, HP lost, damage given, items used, result.
+  Rule:          a change that should help must improve a metric on the same seeds. Write the before and
+                 after numbers in the commit message.
+
+
+16. MISTAKES NOT TO REPEAT
+--------------------------
+
+  - A short log. Keep all events of a game; keep bundles on incidents.
+  - One very large file. Split from day one.
+  - Code from a guess about a screen format. Collect a sample first (shadow mode).
+  - A rule without a source. Write where each rule comes from.
+  - A one-time fix of saved state without a version. Use versioned state migrations.
+  - A test named by version. Name it by feature.
+  - Debug output that holds everything. Make small reports; keep raw data for tools.
+  - A fallback that loops between two rules (in NeoQuest II: "go to the lead" and "go back into the area").
+    Each fallback must have a "tried, do not retry for N turns" mark.
+  - A rule from a source with another goal (a casual guide for a speedrun). Choose the source on purpose.
+
+
+17. OPEN QUESTIONS
+------------------
+
+  - Which NLE version, and which observation keys does it give? (Check before T2.)
+  - Do we use NLE's own ttyrec recording, our own screen log, or both?
+  - Sokoban: a solver, or stored solutions for each variant?
+  - How many seeded games per batch is enough to see a real change in a metric?
+  - When (if ever) does a learned model help? For one narrow job only, for example "is this fight safe?".
+  - Which second role do we add after Valkyrie?
+
+
+18. A SEED FOR CLAUDE.md
+------------------------
+
+  # NetHack bot - read this first
+  Language: Simplified Technical English in docs, comments and commit messages.
+  What it is: a rule-based NetHack player on NLE, with an AI in the improvement loop.
+  Module map: (one line per module, from section 6.1)
+  Glossary: agent-facing telemetry, flight recorder, golden files, record and replay, verify after act,
+            shadow mode, persistent world model, priors, coverage search, versioned state migrations,
+            checked assumptions, incident to test. (Short definitions in docs/glossary.md.)
+  Commands:
+    run one game:        python -m nhbot.main --seed N
+    run a batch:         python -m nhbot.batch --seeds 1-20
+    tests:               pytest -q
+    lint and types:      ruff check . && mypy src
+    reports:             python tools/run_report.py runs/<game>/events.jsonl
+                         python tools/incident_report.py runs/<game>/bundle_<n>/
+  Rules:
+    - Read tools output before raw data.
+    - One module per task when possible.
+    - Each bug fix gets a test from its bundle (incident to test).
+    - Each new guess goes into telemetry/assumptions.py.
+    - Each rule in data/rules has a source.
