@@ -1,0 +1,471 @@
+<title>nhbot Tech Tree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=VT323&display=swap">
+<style>
+/* Layout: phases stack downward like dungeon levels toward the goals. Cards wrap inside each phase.
+   A sticky detail panel sits on the right; on phones it is a bottom sheet. */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --sunken: #e2e7ee;
+  --fg: #17202c;
+  --muted: #566274;
+  --line: #c5cdd9;
+  --ready: #8c5200;
+  --ready-soft: #fbeedb;
+  --done: #2a7146;
+  --done-soft: #dcefe3;
+  --doing: #2456a6;
+  --link: #b46a00;
+  --g-red: #b0302a;
+  --g-green: #2a7146;
+  --g-blue: #2456a6;
+  --g-magenta: #8a3790;
+  --g-brown: #86562a;
+  --g-cyan: #0c6c79;
+  --g-gray: #566274;
+  --font-display: "VT323", "IBM Plex Mono", ui-monospace, monospace;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1218; --surface: #161b23; --sunken: #1d242e; --fg: #dde4ee; --muted: #93a0b2; --line: #2d3644;
+    --ready: #f0b44a; --ready-soft: #33270f; --done: #6cc38b; --done-soft: #15291d; --doing: #82a9f0; --link: #f0b44a;
+    --g-red: #ef7d74; --g-green: #6cc38b; --g-blue: #82a9f0; --g-magenta: #d58cd9; --g-brown: #cf9a63;
+    --g-cyan: #5cc5d1; --g-gray: #93a0b2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1218; --surface: #161b23; --sunken: #1d242e; --fg: #dde4ee; --muted: #93a0b2; --line: #2d3644;
+  --ready: #f0b44a; --ready-soft: #33270f; --done: #6cc38b; --done-soft: #15291d; --doing: #82a9f0; --link: #f0b44a;
+  --g-red: #ef7d74; --g-green: #6cc38b; --g-blue: #82a9f0; --g-magenta: #d58cd9; --g-brown: #cf9a63;
+  --g-cyan: #5cc5d1; --g-gray: #93a0b2;
+  color-scheme: dark;
+}
+
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); }
+.page { max-width: 1320px; margin: 0 auto; padding-inline: 24px; padding-block: 32px 64px; }
+button { font: inherit; color: inherit; }
+button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+
+.masthead { display: grid; gap: 10px; max-width: 72ch; }
+.eyebrow { margin: 0; font: 600 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font: 400 64px/0.9 var(--font-display); letter-spacing: .01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); text-wrap: pretty; }
+.statusline {
+  margin-top: 6px; padding: 6px 10px; background: var(--sunken); border-radius: 4px;
+  font: 13px/1.4 var(--font-mono); white-space: pre-wrap; font-variant-numeric: tabular-nums;
+}
+
+.section-title { margin: 0 0 10px; font: 600 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.goals { margin-top: 28px; }
+.goal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.goal {
+  display: grid; gap: 6px; text-align: left; cursor: pointer; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+}
+.goal[aria-pressed="true"] { border-color: var(--link); box-shadow: 0 0 0 1px var(--link); }
+.goal-name { font: 400 24px/1 var(--font-display); }
+.goal-count { font: 12px/1 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--sunken); border-radius: 3px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--done); }
+
+.ready-now { margin-top: 22px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; gap: 8px; align-items: baseline; cursor: pointer; padding: 6px 10px;
+  background: var(--ready-soft); border: 1px solid var(--ready); border-radius: 999px; font-size: 14px;
+}
+.chip .nid { font: 12px var(--font-mono); color: var(--muted); }
+
+.layout { margin-top: 30px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
+.tree { position: relative; min-width: 0; }
+.links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
+.links .need { fill: none; stroke: var(--link); stroke-width: 2; }
+.links .unlock { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.links .head-need { fill: var(--link); }
+.links .head-unlock { fill: var(--muted); }
+.phases { position: relative; z-index: 1; }
+
+.phase { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 18px; padding-block: 18px; border-top: 1px solid var(--line); }
+.phase:first-child { border-top: 0; padding-top: 0; }
+.phase-label { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; align-content: start; }
+.phase-num { grid-row: span 2; font: 400 44px/0.8 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.phase-label h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
+.phase-label p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.cards { display: flex; flex-wrap: wrap; gap: 10px; align-content: start; min-width: 0; }
+
+.node {
+  position: relative; width: 176px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 3px 8px;
+  text-align: left; cursor: pointer; padding: 10px 12px; border-radius: 6px;
+  background: var(--surface); border: 1px dashed var(--line);
+}
+.node .glyph { grid-row: span 2; font: 600 18px/1.1 var(--font-mono); color: var(--lane); }
+.node .name { font-size: 14px; font-weight: 500; line-height: 1.3; }
+.node .meta { display: flex; flex-wrap: wrap; gap: 2px 8px; font: 11px/1.4 var(--font-mono); color: var(--muted); }
+.node .tag { font-weight: 600; }
+.node[data-state="done"] { background: var(--done-soft); border: 1px solid transparent; }
+.node[data-state="done"] .tag { color: var(--done); }
+.node[data-state="doing"] { border: 2px solid var(--doing); }
+.node[data-state="doing"] .tag { color: var(--doing); }
+.node[data-state="ready"] { border: 2px solid var(--ready); }
+.node[data-state="ready"] .tag { color: var(--ready); }
+.node.milestone { width: 362px; background: var(--sunken); }
+.node.milestone .name { font: 400 26px/1 var(--font-display); }
+[data-lane] { --lane: var(--g-gray); }
+[data-lane="harness"] { --lane: var(--g-green); }
+[data-lane="perceive"] { --lane: var(--g-blue); }
+[data-lane="control"] { --lane: var(--fg); }
+[data-lane="survival"] { --lane: var(--g-red); }
+[data-lane="items"] { --lane: var(--g-magenta); }
+[data-lane="mines"] { --lane: var(--g-brown); }
+[data-lane="sokoban"] { --lane: var(--g-cyan); }
+.order {
+  position: absolute; top: -9px; right: -9px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  background: var(--link); color: var(--bg); font: 600 12px/22px var(--font-mono); text-align: center;
+}
+.tree.focus .node { opacity: .32; }
+.tree.focus .node.on-path, .tree.focus .node.unlock, .tree.focus .node.selected { opacity: 1; }
+.node.selected { outline: 3px solid var(--link); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .node { transition: opacity .15s ease; } }
+
+.detail {
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 32px); overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px;
+}
+.detail h3 { margin: 4px 0 10px; font: 400 32px/1 var(--font-display); text-wrap: balance; }
+.detail h4 { margin: 18px 0 6px; font: 600 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.detail p { margin: 0; }
+.detail .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 12px/1.5 var(--font-mono); color: var(--muted); }
+.detail .pill { font-weight: 600; }
+.detail .pill[data-state="done"] { color: var(--done); }
+.detail .pill[data-state="doing"] { color: var(--doing); }
+.detail .pill[data-state="ready"] { color: var(--ready); }
+.prior { padding: 10px 12px; background: var(--sunken); border-radius: 6px; font-size: 14px; }
+.prior .source { display: block; margin-top: 4px; font: 12px var(--font-mono); color: var(--muted); }
+.steps { margin: 0; padding-left: 26px; display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.linklist { display: flex; flex-wrap: wrap; gap: 6px; }
+.textlink {
+  cursor: pointer; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg);
+  font-size: 13px; text-align: left;
+}
+.steps .textlink { border: 0; padding: 0; background: none; text-decoration: underline; text-underline-offset: 3px; }
+.close { float: right; cursor: pointer; border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 2px 8px; font-size: 13px; }
+.legend { display: grid; gap: 6px; font-size: 13px; }
+.legend-row { display: flex; gap: 10px; align-items: center; }
+.swatch { width: 26px; height: 16px; border-radius: 3px; background: var(--surface); border: 1px dashed var(--line); flex: none; }
+.swatch[data-state="done"] { background: var(--done-soft); border: 1px solid transparent; }
+.swatch[data-state="ready"] { border: 2px solid var(--ready); }
+.swatch[data-state="doing"] { border: 2px solid var(--doing); }
+.lane-glyph { width: 26px; text-align: center; font: 600 16px var(--font-mono); color: var(--lane); flex: none; }
+.load-error { padding: 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.foot { margin-top: 40px; font: 12px/1.6 var(--font-mono); color: var(--muted); }
+
+@media (max-width: 899px) {
+  .page { padding-inline: 16px; padding-block: 24px 48px; }
+  h1 { font-size: 52px; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .detail {
+    position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; top: auto; max-height: 62vh; border-radius: 12px 12px 0 0;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 24px rgb(0 0 0 / .18);
+  }
+  .detail:not(.open) { display: none; }
+  .phase { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .node { width: calc(50% - 5px); min-width: 0; }
+  .node.milestone { width: 100%; }
+}
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow">nhbot · NetHack auto-player</p>
+    <h1>Tech tree</h1>
+    <p class="lede">Everything we must build to take a dwarvish Valkyrie through the Gnomish Mines and Sokoban,
+      in the order it can be built. Select a goal or a card to light up what it needs and the order to build it.</p>
+    <div class="statusline" id="statusline" aria-label="Overall progress">Loading the plan…</div>
+  </header>
+
+  <section class="goals" aria-labelledby="goals-title">
+    <h2 class="section-title" id="goals-title">Goals</h2>
+    <div class="goal-grid" id="goals"></div>
+  </section>
+
+  <section class="ready-now" aria-labelledby="ready-title">
+    <h2 class="section-title" id="ready-title">Ready to build now</h2>
+    <div class="chips" id="ready"></div>
+  </section>
+
+  <div class="layout">
+    <div class="tree" id="tree">
+      <svg class="links" id="links" aria-hidden="true">
+        <defs>
+          <marker id="head-need" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="head-need" d="M0 0 L10 5 L0 10 Z"></path>
+          </marker>
+          <marker id="head-unlock" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path class="head-unlock" d="M0 0 L10 5 L0 10 Z"></path>
+          </marker>
+        </defs>
+        <g id="link-paths"></g>
+      </svg>
+      <div class="phases" id="phases"></div>
+    </div>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+  </div>
+
+  <p class="foot" id="foot">Source: nethack/docs/tech_tree.json in samduthie/nq2auto.</p>
+</div>
+
+<script>
+(() => {
+  const STATE_TEXT = { done: "Built", doing: "In progress", ready: "Ready", locked: "Locked" };
+  const byId = id => document.getElementById(id);
+  const treeView = byId("tree");
+  const detail = byId("detail");
+  let selectedId = null;
+  let model = null;
+
+  const isChild = child => child instanceof Node || typeof child === "string";
+  const fill = (target, ...children) => target.replaceChildren(...children.filter(isChild));
+
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key === "class") node.className = value;
+      else if (key === "dataset") Object.assign(node.dataset, value);
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value);
+    }
+    node.append(...children.filter(isChild));
+    return node;
+  }
+
+  function buildModel(data) {
+    const nodes = new Map(data.nodes.map((node, index) => [node.id, { ...node, index, unlocks: [] }]));
+    nodes.forEach(node => node.needs.forEach(id => nodes.get(id).unlocks.push(node.id)));
+    const isBuilt = id => nodes.get(id).status === "done";
+    const stateOf = node => node.status === "done" ? "done" : node.status === "doing" ? "doing"
+      : node.needs.every(isBuilt) ? "ready" : "locked";
+    const ancestorsCache = new Map();
+    const ancestorsOf = id => {
+      if (!ancestorsCache.has(id)) {
+        const found = new Set();
+        const stack = [...nodes.get(id).needs];
+        while (stack.length) {
+          const next = stack.pop();
+          if (!found.has(next)) { found.add(next); stack.push(...nodes.get(next).needs); }
+        }
+        ancestorsCache.set(id, found);
+      }
+      return ancestorsCache.get(id);
+    };
+    return { data, nodes, isBuilt, stateOf, ancestorsOf, rank: buildRank(nodes),
+      lanes: new Map(data.lanes.map((lane, index) => [lane.id, { ...lane, index }])) };
+  }
+
+  // A build order: each node after its needs; ties go to the earlier phase, then the earlier entry in the file.
+  function buildRank(nodes) {
+    const waiting = new Map([...nodes.values()].map(node => [node.id, node.needs.length]));
+    const rank = new Map();
+    while (rank.size < nodes.size) {
+      const next = [...waiting].filter(([, count]) => count === 0).map(([id]) => nodes.get(id))
+        .sort((a, b) => a.phase - b.phase || a.index - b.index)[0];
+      rank.set(next.id, rank.size);
+      waiting.delete(next.id);
+      next.unlocks.forEach(id => waiting.set(id, waiting.get(id) - 1));
+    }
+    return rank;
+  }
+
+  const stepsTo = id => [...model.ancestorsOf(id)].filter(need => !model.isBuilt(need))
+    .sort((a, b) => model.rank.get(a) - model.rank.get(b));
+
+  function progressOf(id) {
+    const path = [...model.ancestorsOf(id), id];
+    return { built: path.filter(model.isBuilt).length, total: path.length };
+  }
+
+  function card(node) {
+    const state = model.stateOf(node);
+    return el("button", {
+      class: "node" + (node.kind === "milestone" ? " milestone" : ""), type: "button", id: "node-" + node.id,
+      "aria-pressed": "false", dataset: { id: node.id, state, lane: node.lane },
+      onclick: () => select(selectedId === node.id ? null : node.id),
+    },
+      el("span", { class: "glyph", "aria-hidden": "true" }, model.lanes.get(node.lane).glyph),
+      el("span", { class: "name" }, node.name),
+      el("span", { class: "meta" }, el("span", { class: "tag" }, node.kind === "milestone" ? "Goal · " + STATE_TEXT[state] : STATE_TEXT[state]),
+        el("span", { class: "nid" }, node.id)));
+  }
+
+  function renderPhases() {
+    const nodes = [...model.nodes.values()];
+    const laneIndex = node => model.lanes.get(node.lane).index;
+    const phases = model.data.phases.map(phase => {
+      const members = nodes.filter(node => node.phase === phase.id)
+        .sort((a, b) => (a.kind === "milestone") - (b.kind === "milestone") || laneIndex(a) - laneIndex(b) || a.index - b.index);
+      return el("section", { class: "phase", "aria-label": `Phase ${phase.id}: ${phase.name}` },
+        el("div", { class: "phase-label" },
+          el("span", { class: "phase-num" }, String(phase.id)),
+          el("h2", {}, phase.name),
+          el("p", {}, phase.summary)),
+        el("div", { class: "cards" }, ...members.map(card)));
+    });
+    byId("phases").replaceChildren(...phases);
+  }
+
+  function renderGoals() {
+    byId("goals").replaceChildren(...model.data.goals.map(id => {
+      const goal = model.nodes.get(id);
+      const { built, total } = progressOf(id);
+      return el("button", { class: "goal", type: "button", "aria-pressed": "false", dataset: { goal: id }, onclick: () => select(selectedId === id ? null : id) },
+        el("span", { class: "goal-name" }, goal.name),
+        el("span", { class: "goal-count" }, `${built} of ${total} built · phase ${goal.phase}`),
+        el("span", { class: "bar", "aria-hidden": "true" }, el("span", { style: `width:${(100 * built / total).toFixed(1)}%` })));
+    }));
+  }
+
+  function renderReady() {
+    const ready = [...model.nodes.values()].filter(node => model.stateOf(node) === "ready");
+    byId("ready").replaceChildren(...ready.map(node =>
+      el("button", { class: "chip", type: "button", onclick: () => select(node.id) },
+        el("span", {}, node.name), el("span", { class: "nid" }, node.id))));
+  }
+
+  function renderStatusline() {
+    const nodes = [...model.nodes.values()];
+    const built = nodes.filter(node => node.status === "done").length;
+    const ready = nodes.filter(node => model.stateOf(node) === "ready").length;
+    const next = model.data.goals.map(id => model.nodes.get(id)).find(goal => goal.status !== "done");
+    byId("statusline").textContent =
+      `Built:${built}/${nodes.length}  Ready:${ready}  Locked:${nodes.length - built - ready}  Next goal:${next ? next.name : "none"}  Updated:${model.data.updated}`;
+  }
+
+  const linkButton = (id, cls = "textlink") =>
+    el("button", { class: cls, type: "button", onclick: () => select(id) }, model.nodes.get(id).name);
+
+  function renderGuide() {
+    const legendRow = (swatch, text) => el("div", { class: "legend-row" }, swatch, el("span", {}, text));
+    fill(detail,
+      el("p", { class: "eyebrow" }, "How to read this"),
+      el("h3", {}, "From the harness to the prize"),
+      el("p", {}, model.data.about),
+      el("h4", {}, "States"),
+      el("div", { class: "legend" },
+        ...["done", "doing", "ready", "locked"].map(state => legendRow(el("span", { class: "swatch", dataset: { state } }),
+          { done: "Built", doing: "In progress", ready: "Ready: all of its needs are built", locked: "Locked: it needs something that is not built" }[state]))),
+      el("h4", {}, "Lanes"),
+      el("div", { class: "legend" }, ...model.data.lanes.map(lane => legendRow(
+        el("span", { class: "lane-glyph", dataset: { lane: lane.id } }, lane.glyph), lane.name))));
+  }
+
+  function renderDetail(node) {
+    const state = model.stateOf(node);
+    const steps = stepsTo(node.id);
+    const facts = [el("span", { class: "pill", dataset: { state } }, STATE_TEXT[state]),
+      el("span", {}, `phase ${node.phase}`), node.brief && el("span", {}, `brief ${node.brief}`), node.code && el("span", {}, node.code)];
+    fill(detail,
+      el("button", { class: "close", type: "button", onclick: () => select(null) }, "Close"),
+      el("p", { class: "eyebrow" }, `${model.lanes.get(node.lane).glyph}  ${model.lanes.get(node.lane).name}`),
+      el("h3", {}, node.name),
+      el("div", { class: "facts" }, ...facts),
+      el("h4", {}, "Done when"), el("p", {}, node.done_when),
+      node.why && el("h4", {}, "Why"), node.why && el("p", {}, node.why),
+      node.prior && el("h4", {}, "Prior, not checked yet"),
+      node.prior && el("div", { class: "prior" }, node.prior.text, el("span", { class: "source" }, "Source: " + node.prior.source)),
+      el("h4", {}, state === "done" ? "Build order" : `Build order: ${steps.length} before this`),
+      steps.length ? el("ol", { class: "steps" }, ...steps.map(id => el("li", {}, linkButton(id))))
+        : el("p", {}, state === "done" ? "Built." : "Nothing. All of its needs are built."),
+      node.needs.length && el("h4", {}, "Needs"),
+      node.needs.length && el("div", { class: "linklist" }, ...node.needs.map(id => linkButton(id))),
+      node.unlocks.length && el("h4", {}, "Unlocks"),
+      node.unlocks.length && el("div", { class: "linklist" }, ...node.unlocks.map(id => linkButton(id))));
+  }
+
+  function select(id) {
+    selectedId = id;
+    const node = id && model.nodes.get(id);
+    const path = node ? model.ancestorsOf(id) : new Set();
+    const order = node ? stepsTo(id) : [];
+    treeView.classList.toggle("focus", Boolean(node));
+    document.querySelectorAll(".node[data-id]").forEach(card => {
+      const cardId = card.dataset.id;
+      card.classList.toggle("selected", cardId === id);
+      card.classList.toggle("on-path", path.has(cardId));
+      card.classList.toggle("unlock", Boolean(node) && node.unlocks.includes(cardId));
+      card.setAttribute("aria-pressed", String(cardId === id));
+      card.querySelector(".order")?.remove();
+      const position = order.indexOf(cardId);
+      if (position >= 0) card.append(el("span", { class: "order", "aria-label": `build step ${position + 1}` }, String(position + 1)));
+    });
+    document.querySelectorAll(".goal").forEach(goal => goal.setAttribute("aria-pressed", String(goal.dataset.goal === id)));
+    node ? renderDetail(node) : renderGuide();
+    detail.classList.toggle("open", Boolean(node));
+    try { history.replaceState(null, "", node ? "#" + id : location.pathname + location.search); } catch (error) { /* the frame can refuse it */ }
+    drawLinks();
+    if (node) byId("node-" + id).scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function drawLinks() {
+    const group = byId("link-paths");
+    group.replaceChildren();
+    const node = selectedId && model.nodes.get(selectedId);
+    if (!node) return;
+    const origin = treeView.getBoundingClientRect();
+    const box = id => {
+      const rect = byId("node-" + id).getBoundingClientRect();
+      return { left: rect.left - origin.left, right: rect.right - origin.left, top: rect.top - origin.top, bottom: rect.bottom - origin.top };
+    };
+    const path = (fromId, toId, kind) => {
+      const from = box(fromId), to = box(toId);
+      const midX = box => (box.left + box.right) / 2, midY = box => (box.top + box.bottom) / 2;
+      let d;
+      if (from.bottom <= to.top || from.top >= to.bottom) {
+        const down = from.bottom <= to.top;
+        const [x1, y1, x2, y2] = down ? [midX(from), from.bottom, midX(to), to.top] : [midX(from), from.top, midX(to), to.bottom];
+        const bend = Math.max(28, Math.abs(y2 - y1) / 2) * (down ? 1 : -1);
+        d = `M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}`;
+      } else {
+        const right = from.right <= to.left;
+        const [x1, x2] = right ? [from.right, to.left] : [from.left, to.right];
+        const bend = Math.max(20, Math.abs(x2 - x1) / 2) * (right ? 1 : -1);
+        d = `M${x1} ${midY(from)} C${x1 + bend} ${midY(from)} ${x2 - bend} ${midY(to)} ${x2} ${midY(to)}`;
+      }
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      line.setAttribute("d", d);
+      line.setAttribute("class", kind);
+      line.setAttribute("marker-end", `url(#head-${kind})`);
+      group.append(line);
+    };
+    node.needs.forEach(id => path(id, node.id, "need"));
+    node.unlocks.forEach(id => path(node.id, id, "unlock"));
+  }
+
+  function start(data) {
+    model = buildModel(data);
+    renderStatusline();
+    renderGoals();
+    renderReady();
+    renderPhases();
+    byId("foot").textContent = `Source: nethack/docs/tech_tree.json in samduthie/nq2auto. ${model.nodes.size} nodes. Updated ${data.updated}.`;
+    const fromHash = location.hash.slice(1);
+    select(model.nodes.has(fromHash) ? fromHash : null);
+    new ResizeObserver(drawLinks).observe(treeView);
+    document.fonts?.ready.then(drawLinks);
+    document.addEventListener("keydown", event => { if (event.key === "Escape" && selectedId) select(null); });
+  }
+
+  fetch("tech_tree.json")
+    .then(response => { if (!response.ok) throw new Error("HTTP " + response.status); return response.json(); })
+    .then(start)
+    .catch(error => {
+      byId("statusline").textContent = "The plan did not load.";
+      byId("phases").replaceChildren(el("p", { class: "load-error" },
+        `Could not load tech_tree.json (${error.message}). Open this page through a web server, next to tech_tree.json.`));
+    });
+})();
+</script>

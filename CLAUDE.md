@@ -12,6 +12,14 @@ The bot plays and records data. The AI reads the records, fixes the code and add
 Targets: M1 depth 5. M2 Minetown or depth 10. M3 Sokoban. (Brief section 1.2.)
 Two views of the same loop: watch mode (draws the game in the terminal) and headless mode (fast batches).
 
+## The plan (tech tree)
+- `nethack/docs/tech_tree.json` is the plan: phases, nodes, needs and "done when" for each node.
+  To choose the next task, pick a node whose needs are all `done`.
+- Set a node to `doing` when work starts. Set it to `done` in the same commit as the work.
+- `tests/docs/test_tech_tree.py` checks the file (ids, needs, phases, no cycles).
+- `nethack/docs/tech_tree.html` draws the plan. Published: https://claude.ai/artifact/CB6K4D8QwKU4DY8mPxbfGv
+  After a change to the JSON, publish the page again with `tech_tree.json` next to it.
+
 ## Language
 Simplified Technical English (ASD-STE100) in docs, comments, commit messages and log text.
 Short sentences. Simple words. One instruction in each sentence.
